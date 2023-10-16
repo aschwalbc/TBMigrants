@@ -34,7 +34,8 @@ tbmig <- tbmig %>%
   select(id,tbdx,sex,agegp,time_a,time_b,travel,time_x,time_y,time_z,contact,actscr,etoh,dm,nfa,hiv,cavitation,uz,mlz,inh_res) %>% # Select variables
   mutate(across(.cols=c(sex,agegp,travel,actscr,contact,etoh,dm,nfa,hiv,cavitation,uz,mlz,inh_res), .fns=as.factor)) %>% # Coerce into factors
   arrange(id) # Order by ID
-export(tbmig, here("data","tbmig - clean.xlsx"))
+
+tbmig <- import(here("data", "tbmig - clean.xlsx"))
 
 tbmig <- tbmig %>% # (n = 369)
   filter(!(is.na(travel))) %>% # Individuals without info on travel (n=11)
@@ -59,6 +60,8 @@ tbmig %>% tabyl(travel)
 tbmig %>% tabyl(cavitation)
 tbmig %>% tabyl(inh_res)
 tbmig %>% tabyl(travel, actscr)
+tbmig %>% tabyl(cob)
+tbmig %>% tabyl(hightb)
 
 # Sub-group descriptive analysis ====
 tbmigsub <- tbmig %>% # (n = 320)
@@ -162,7 +165,7 @@ kmplot <- km$plot +
 
 kmplot / km$table + plot_layout(design = layout)
   
-tiff("SFigure 1.tiff",  width = 7, height = 5, units = 'in', res = 200) 
+tiff("SFigure 2.tiff",  width = 7, height = 5, units = 'in', res = 200) 
 kmplot / km$table + plot_layout(design = layout)
 dev.off()
 
@@ -210,6 +213,121 @@ kmplot <- km$plot +
 
 kmplot / km$table + plot_layout(design = layout)
 
-tiff("SFigure 2.tiff",  width = 7, height = 5, units = 'in', res = 200) 
+tiff("SFigure 1.tiff",  width = 7, height = 5, units = 'in', res = 200) 
 kmplot / km$table + plot_layout(design = layout)
 dev.off()
+
+# Only high TB burden countries
+tbmigsa <- tbmig %>% # (n = 320)
+  filter(hightb == 1) # Include individuals who traveled to a high TB burden country (n=88)
+
+sum(tbmigsa$time_a, na.rm = TRUE)/length(tbmigsa)/365.25 # Total follow-up (person-years)
+
+# Survival from migration
+survmig <- Surv(time = tbmig$time_a, event = tbmig$tbdx)
+survmigfit <- survfit(survmig ~ 1)
+survmigfitq <- quantile(survmigfit, probs = c(0.5, 0.8, 1.0), conf.int = TRUE)
+survmigfitq$quantile/365.25 # Best estimate
+survmigfitq$lower/365.25 # Lower bound
+survmigfitq$upper/365.25 # Upper bound
+
+ggsurvplot(survmigfit, data.frame(time=tbmig$time_a, tbmig$tbdx), fun = "event", surv.median.line = "hv")
+
+# Survival from travel
+survtrav <- Surv(time = tbmigsa$time_x, event = tbmigsa$tbdx)
+survtravfit <- survfit(survtrav ~ 1)
+survtravfitq <- quantile(survtravfit, probs = c(0.5, 0.8, 1.0), conf.int = TRUE)
+survtravfitq$quantile/365.25 # Best estimate
+survtravfitq$lower/365.25 # Lower bound
+survtravfitq$upper/365.25 # Upper bound
+
+ggsurvplot(survtravfit, data.frame(time=tbmigsa$time_x, tbmigsa$tbdx), fun = "event", surv.median.line = "hv")
+
+fits <- list(TRAV = survtravfit, MIG = survmigfit)
+
+km <- ggsurvplot(fits, ggtheme = theme_classic(), palette = c("#D95F02","#7570B3"), conf.int = TRUE,
+                 xlab = "Years", ylab = "TB diagnosis", fun = "event", combine = TRUE,
+                 legend = "bottom", legend.title = "Follow-up",  legend.labs = c("travel", "migration"),
+                 risk.table = "abs_pct", fontsize = 3, ylim = c(0, 1), surv.scale = c("percent"),
+                 xscale = 365.25, break.x.by = 365.25*2, xlim = c(0,365.25*20), axes.offset = FALSE)
+
+kmplot <- km$plot + 
+  geom_segment(aes(x = 2420, y = 0.5, xend = 0, yend = 0.5), linetype = "dashed", color = "grey") +
+  geom_segment(aes(x = 2420, y = 0.5, xend = 2420, yend = 0), linetype = "dashed", color = "grey") +
+  geom_segment(aes(x = 302, y = 0.5, xend = 302, yend = 0), linetype = "dashed", color = "grey") + 
+  geom_segment(aes(x = 5963, y = 0.8, xend = 0, yend = 0.8), linetype = "dashed", color = "grey") +
+  geom_segment(aes(x = 5963, y = 0.8, xend = 5963, yend = 0), linetype = "dashed", color = "grey") +
+  geom_segment(aes(x = 991, y = 0.8, xend = 991, yend = 0), linetype = "dashed", color = "grey")
+
+kmplot / km$table + plot_layout(design = layout)
+
+tiff("SFigure 3.tiff",  width = 7, height = 5, units = 'in', res = 200) 
+kmplot / km$table + plot_layout(design = layout)
+dev.off()
+
+# Excluding low TB burden countries
+tbmigsa <- tbmig %>% # (n = 320)
+  filter(!lowtb == 1) # Exclude individuals who traveled to a high TB burden country (n=88)
+
+sum(tbmigsa$time_a, na.rm = TRUE)/length(tbmigsa)/365.25 # Total follow-up (person-years)
+
+# Survival from migration
+survmig <- Surv(time = tbmig$time_a, event = tbmig$tbdx)
+survmigfit <- survfit(survmig ~ 1)
+survmigfitq <- quantile(survmigfit, probs = c(0.5, 0.8, 1.0), conf.int = TRUE)
+survmigfitq$quantile/365.25 # Best estimate
+survmigfitq$lower/365.25 # Lower bound
+survmigfitq$upper/365.25 # Upper bound
+
+ggsurvplot(survmigfit, data.frame(time=tbmig$time_a, tbmig$tbdx), fun = "event", surv.median.line = "hv")
+
+# Survival from travel
+survtrav <- Surv(time = tbmigsa$time_x, event = tbmigsa$tbdx)
+survtravfit <- survfit(survtrav ~ 1)
+survtravfitq <- quantile(survtravfit, probs = c(0.5, 0.8, 1.0), conf.int = TRUE)
+survtravfitq$quantile/365.25 # Best estimate
+survtravfitq$lower/365.25 # Lower bound
+survtravfitq$upper/365.25 # Upper bound
+
+ggsurvplot(survtravfit, data.frame(time=tbmigsa$time_x, tbmigsa$tbdx), fun = "event", surv.median.line = "hv")
+
+fits <- list(TRAV = survtravfit, MIG = survmigfit)
+
+km <- ggsurvplot(fits, ggtheme = theme_classic(), palette = c("#D95F02","#7570B3"), conf.int = TRUE,
+                 xlab = "Years", ylab = "TB diagnosis", fun = "event", combine = TRUE,
+                 legend = "bottom", legend.title = "Follow-up",  legend.labs = c("travel", "migration"),
+                 risk.table = "abs_pct", fontsize = 3, ylim = c(0, 1), surv.scale = c("percent"),
+                 xscale = 365.25, break.x.by = 365.25*2, xlim = c(0,365.25*20), axes.offset = FALSE)
+
+kmplot <- km$plot + 
+  geom_segment(aes(x = 2420, y = 0.5, xend = 0, yend = 0.5), linetype = "dashed", color = "grey") +
+  geom_segment(aes(x = 2420, y = 0.5, xend = 2420, yend = 0), linetype = "dashed", color = "grey") +
+  geom_segment(aes(x = 212, y = 0.5, xend = 212, yend = 0), linetype = "dashed", color = "grey") + 
+  geom_segment(aes(x = 5963, y = 0.8, xend = 0, yend = 0.8), linetype = "dashed", color = "grey") +
+  geom_segment(aes(x = 5963, y = 0.8, xend = 5963, yend = 0), linetype = "dashed", color = "grey") +
+  geom_segment(aes(x = 750, y = 0.8, xend = 750, yend = 0), linetype = "dashed", color = "grey")
+
+kmplot / km$table + plot_layout(design = layout)
+
+tiff("SFigure 4.tiff",  width = 7, height = 5, units = 'in', res = 200) 
+kmplot / km$table + plot_layout(design = layout)
+dev.off()
+
+# Data ====
+WHO2014 <- import(here("data","WHOest_1990-2014.csv"))
+WHO2023 <- import(here("data","WHOest_2000-2021.csv"))
+
+# Data curation ====
+WHO <- WHO2023 %>% # High TB burden
+  select(country, iso3, year, e_inc_100k, e_inc_100k_lo, e_inc_100k_hi) %>% 
+  filter(year <= 2018) %>% 
+  group_by(iso3) %>%
+  filter(any(e_inc_100k >= 150 | e_inc_100k_lo >= 150 | e_inc_100k_hi >= 150)) %>%
+  ungroup()
+
+WHO <- WHO2023 %>% # Low TB burden
+  select(country, iso3, year, e_inc_100k, e_inc_100k_lo, e_inc_100k_hi) %>% 
+  filter(year <= 2018) %>% 
+  group_by(iso3) %>%
+  filter(any(e_inc_100k <= 10 & e_inc_100k_lo <= 10 & e_inc_100k_hi <= 10)) %>%
+  ungroup()
